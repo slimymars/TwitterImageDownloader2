@@ -2,10 +2,23 @@ import { ImageInfo } from "./ImageInfo";
 import { Setting, CreateDefaultSetting, IsLatestDataVersion, MigrateSetting1to2 } from "./Setting";
 
 function doDownload(setting: Setting, image: ImageInfo){
-	chrome.downloads.download({
-		url: image.downloadUrl,
-		filename: image.filename,
-		saveAs: setting.open_save_as,
+	console.log("begin doDownload");
+	console.log("setting", setting);
+	console.log("image", image);
+	chrome.storage.local.get("queue", (obj) => {
+		console.log("get obj", obj);
+		let queue : {url: string; filename: string; created: Date}[] = (obj === undefined || obj === null || !("queue" in obj)) ?
+			[] : (obj.queue as {url: string; filename: string; created: Date}[]);
+		queue = queue.filter((v)=>v.created.getTime() > Date.now() - 24 * 60 * 60 * 1000);
+		queue.push({url: image.downloadUrl, filename: image.filename, created: new Date()})
+		console.log("save queue", queue);
+		chrome.storage.local.set({queue: queue}, ()=>{
+			chrome.downloads.download({
+				url: image.downloadUrl,
+				filename: image.filename,
+				saveAs: setting.open_save_as,
+			});	
+		});	
 	});
 }
 
@@ -114,4 +127,23 @@ chrome.contextMenus.onClicked.addListener((info: chrome.contextMenus.OnClickData
 			sendMessage(name, info.pageUrl, setting.download_to!, tab.id, info.srcUrl);
 		}
 	});
+});
+
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+	if (item.byExtensionId !== chrome.runtime.id) return;
+	console.log("onDeterminingFilename id", item.id);
+	chrome.storage.local.get("queue", (obj) => {
+		if (obj === undefined || obj === null || !("queue" in obj)) return;
+		console.log("load queue obj", obj);
+		let queue : {url: string; filename: string; created: Date}[] = obj.queue as {url: string; filename: string; created: Date}[];
+		const i = queue.findIndex((v)=>v.url === item.url);
+		if (i === -1) {
+			console.log("not found queue.");
+			return;
+		}
+		suggest({filename: queue[i].filename});
+		queue.splice(i, 1);
+		chrome.storage.local.set({queue: queue});
+	});
+	return true;
 });
