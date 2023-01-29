@@ -71,9 +71,15 @@ const sendMessage: (name: string, pageUrl: string, format: string, tabId?: numbe
 			console.log("TIL send message response: ");
 			console.log(response);
 
-			if (response === null) alert('The selected link is not a Twitter image.');
-			//  event page -> current page
-			else downloadImage(response);
+			if (response === null) {
+				alert('The selected link is not a Twitter image.');
+			} else if (response === undefined) {
+				const errmsg = chrome.runtime.lastError;
+				alert('err: ' + errmsg?.message);
+				console.log('err', errmsg);
+			} else {
+				downloadImage(response);
+			}
 		}
 	)
 }
